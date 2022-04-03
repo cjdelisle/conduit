@@ -1141,7 +1141,7 @@ fn handle_outlier_pdu<'a>(
         // Build map of auth events
         let mut auth_events = HashMap::new();
         for id in &incoming_pdu.auth_events {
-            let auth_event = match db.rooms.get_pdu(id).map_err(|e| e.to_string())? {
+            let auth_event = match db.rooms._get_pdu(id).map_err(|e| e.to_string())? {
                 Some(e) => e,
                 None => {
                     warn!("Could not find auth event {}", id);
@@ -1182,7 +1182,7 @@ fn handle_outlier_pdu<'a>(
             && incoming_pdu.prev_events == incoming_pdu.auth_events
         {
             db.rooms
-                .get_pdu(&incoming_pdu.auth_events[0])
+                ._get_pdu(&incoming_pdu.auth_events[0])
                 .map_err(|e| e.to_string())?
                 .filter(|maybe_create| **maybe_create == *create_event)
         } else {
@@ -1266,7 +1266,7 @@ async fn upgrade_outlier_to_timeline_pdu(
         if let Some(Ok(mut state)) = state {
             warn!("Using cached state");
             let prev_pdu =
-                db.rooms.get_pdu(prev_event).ok().flatten().ok_or_else(|| {
+                db.rooms.get_pdu(prev_event).await.ok().flatten().ok_or_else(|| {
                     "Could not find prev event, but we know the state.".to_owned()
                 })?;
 
@@ -1288,7 +1288,7 @@ async fn upgrade_outlier_to_timeline_pdu(
 
         let mut okay = true;
         for prev_eventid in &incoming_pdu.prev_events {
-            let prev_event = if let Ok(Some(pdu)) = db.rooms.get_pdu(prev_eventid) {
+            let prev_event = if let Ok(Some(pdu)) = db.rooms.get_pdu(prev_eventid).await {
                 pdu
             } else {
                 okay = false;
@@ -1350,7 +1350,7 @@ async fn upgrade_outlier_to_timeline_pdu(
                 &fork_states,
                 auth_chain_sets,
                 |id| {
-                    let res = db.rooms.get_pdu(id);
+                    let res = db.rooms._get_pdu(id);
                     if let Err(e) = &res {
                         error!("LOOK AT ME Failed to fetch event: {}", e);
                     }
@@ -1462,7 +1462,7 @@ async fn upgrade_outlier_to_timeline_pdu(
         && incoming_pdu.prev_events == incoming_pdu.auth_events
     {
         db.rooms
-            .get_pdu(&incoming_pdu.auth_events[0])
+            .get_pdu(&incoming_pdu.auth_events[0]).await
             .map_err(|e| e.to_string())?
             .filter(|maybe_create| **maybe_create == *create_event)
     } else {
@@ -1480,7 +1480,7 @@ async fn upgrade_outlier_to_timeline_pdu(
                 .ok()
                 .flatten()
                 .and_then(|shortstatekey| state_at_incoming_event.get(&shortstatekey))
-                .and_then(|event_id| db.rooms.get_pdu(event_id).ok().flatten())
+                .and_then(|event_id| db.rooms._get_pdu(event_id).ok().flatten())
         },
     )
     .map_err(|_e| "Auth check failed.".to_owned())?;
@@ -1591,7 +1591,7 @@ async fn upgrade_outlier_to_timeline_pdu(
         for id in dbg!(&extremities) {
             match db
                 .rooms
-                .get_pdu(id)
+                .get_pdu(id).await
                 .map_err(|_| "Failed to ask db for pdu.".to_owned())?
             {
                 Some(leaf_pdu) => {
@@ -1690,7 +1690,7 @@ async fn upgrade_outlier_to_timeline_pdu(
                 &fork_states,
                 auth_chain_sets,
                 |id| {
-                    let res = db.rooms.get_pdu(id);
+                    let res = db.rooms._get_pdu(id);
                     if let Err(e) = &res {
                         error!("LOOK AT ME Failed to fetch event: {}", e);
                     }
@@ -1798,7 +1798,7 @@ pub(crate) fn fetch_and_handle_outliers<'a>(
             // a. Look in the main timeline (pduid_pdu tree)
             // b. Look at outlier pdu tree
             // (get_pdu_json checks both)
-            if let Ok(Some(local_pdu)) = db.rooms.get_pdu(id) {
+            if let Ok(Some(local_pdu)) = db.rooms._get_pdu(id) {
                 trace!("Found {} in db", id);
                 pdus.push((local_pdu, None));
                 continue;
@@ -1815,7 +1815,7 @@ pub(crate) fn fetch_and_handle_outliers<'a>(
                     continue;
                 }
 
-                if let Ok(Some(_)) = db.rooms.get_pdu(&next_id) {
+                if let Ok(Some(_)) = db.rooms._get_pdu(&next_id) {
                     trace!("Found {} in db", id);
                     continue;
                 }
@@ -2239,7 +2239,7 @@ fn get_auth_chain_inner(
     let mut found = HashSet::new();
 
     while let Some(event_id) = todo.pop() {
-        match db.rooms.get_pdu(&event_id) {
+        match db.rooms._get_pdu(&event_id) {
             Ok(Some(pdu)) => {
                 if pdu.room_id != room_id {
                     return Err(Error::BadRequest(ErrorKind::Forbidden, "Evil event in db"));
@@ -2634,7 +2634,7 @@ pub async fn create_join_event_template_route(
     // Our depth is the maximum depth of prev_events + 1
     let depth = prev_events
         .iter()
-        .filter_map(|event_id| Some(db.rooms.get_pdu(event_id).ok()??.depth))
+        .filter_map(|event_id| Some(db.rooms._get_pdu(event_id).ok()??.depth))
         .max()
         .unwrap_or_else(|| uint!(0))
         + uint!(1);

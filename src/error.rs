@@ -61,6 +61,11 @@ pub enum Error {
         #[from]
         source: std::io::Error,
     },
+    #[error("Error spawning tokio task: {source}")]
+    TokioJoinError {
+        #[from]
+        source: tokio::task::JoinError,
+    },
     #[error("{0}")]
     BadServerResponse(&'static str),
     #[error("{0}")]

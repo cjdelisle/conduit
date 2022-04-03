@@ -386,7 +386,7 @@ async fn sync_helper(
                 let (event_type, state_key) = db.rooms.get_statekey_from_short(shortstatekey)?;
 
                 if event_type != EventType::RoomMember {
-                    let pdu = match db.rooms.get_pdu(&id)? {
+                    let pdu = match db.rooms._get_pdu(&id)? {
                         Some(pdu) => pdu,
                         None => {
                             error!("Pdu in state not found: {}", id);
@@ -398,7 +398,7 @@ async fn sync_helper(
                     || body.full_state
                     || timeline_users.contains(&state_key)
                 {
-                    let pdu = match db.rooms.get_pdu(&id)? {
+                    let pdu = match db.rooms._get_pdu(&id)? {
                         Some(pdu) => pdu,
                         None => {
                             error!("Pdu in state not found: {}", id);
@@ -467,7 +467,7 @@ async fn sync_helper(
 
                 for (key, id) in current_state_ids {
                     if body.full_state || since_state_ids.get(&key) != Some(&id) {
-                        let pdu = match db.rooms.get_pdu(&id)? {
+                        let pdu = match db.rooms._get_pdu(&id)? {
                             Some(pdu) => pdu,
                             None => {
                                 error!("Pdu in state not found: {}", id);

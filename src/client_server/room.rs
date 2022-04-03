@@ -434,7 +434,7 @@ pub async fn get_room_event_route(
     Ok(get_room_event::v3::Response {
         event: db
             .rooms
-            .get_pdu(&body.event_id)?
+            .get_pdu(&body.event_id).await?
             .ok_or(Error::BadRequest(ErrorKind::NotFound, "Event not found."))?
             .to_room_event(),
     })

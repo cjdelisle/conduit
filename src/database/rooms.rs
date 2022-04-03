@@ -36,6 +36,7 @@ use std::{
     fmt::Debug,
     iter,
     mem::size_of,
+    ops::Deref,
     sync::{Arc, Mutex, RwLock},
 };
 use tokio::sync::MutexGuard;
@@ -50,7 +51,7 @@ use super::{abstraction::Tree, pusher};
 pub type StateHashId = Vec<u8>;
 pub type CompressedStateEvent = [u8; 2 * size_of::<u64>()];
 
-pub struct Rooms {
+pub struct RoomsInt {
     pub edus: RoomEdus,
     pub(super) pduid_pdu: Arc<dyn Tree>, // PduId = ShortRoomId + Count
     pub(super) eventid_pduid: Arc<dyn Tree>,
@@ -131,6 +132,27 @@ pub struct Rooms {
     pub(super) lasttimelinecount_cache: Mutex<HashMap<Box<RoomId>, u64>>,
 }
 
+impl Into<Rooms> for RoomsInt {
+    fn into(self) -> Rooms {
+        Rooms(Arc::new(self))
+    }
+}
+
+pub struct Rooms(Arc<RoomsInt>);
+
+impl Deref for Rooms {
+    type Target = RoomsInt;
+    fn deref(&self) -> &RoomsInt {
+        &self.0
+    }
+}
+
+impl Clone for Rooms {
+    fn clone(&self) -> Self {
+        Self(Arc::clone(&self.0))
+    }
+}
+
 impl Rooms {
     /// Builds a StateMap by iterating over all keys that start
     /// with state_hash, this gives the full state for the given state_hash.
@@ -161,7 +183,7 @@ impl Rooms {
             .into_iter()
             .map(|compressed| self.parse_compressed_state_event(compressed))
             .filter_map(|r| r.ok())
-            .map(|(_, eventid)| self.get_pdu(&eventid))
+            .map(|(_, eventid)| self._get_pdu(&eventid))
             .filter_map(|r| r.ok().flatten())
             .map(|pdu| {
                 Ok::<_, Error>((
@@ -215,7 +237,7 @@ impl Rooms {
         state_key: &str,
     ) -> Result<Option<Arc<PduEvent>>> {
         self.state_get_id(shortstatehash, event_type, state_key)?
-            .map_or(Ok(None), |event_id| self.get_pdu(&event_id))
+            .map_or(Ok(None), |event_id| self._get_pdu(&event_id))
     }
 
     /// Returns the state hash for this pdu.
@@ -291,7 +313,7 @@ impl Rooms {
             .filter_map(|(shortstatekey, event_id)| {
                 sauthevents.remove(&shortstatekey).map(|k| (k, event_id))
             })
-            .filter_map(|(k, event_id)| self.get_pdu(&event_id).ok().flatten().map(|pdu| (k, pdu)))
+            .filter_map(|(k, event_id)| self._get_pdu(&event_id).ok().flatten().map(|pdu| (k, pdu)))
             .collect())
     }
 
@@ -1083,11 +1105,19 @@ impl Rooms {
             .transpose()
     }
 
+    pub async fn get_pdu(&self, event_id: &EventId) -> Result<Option<Arc<PduEvent>>> {
+        let this = self.clone();
+        let eid = event_id.to_owned();
+        tokio::task::spawn_blocking(move || {
+            this._get_pdu(&eid)
+        }).await?
+    }
+
     /// Returns the pdu.
     ///
     /// Checks the `eventid_outlierpdu` Tree if not found in the timeline.
     #[tracing::instrument(skip(self))]
-    pub fn get_pdu(&self, event_id: &EventId) -> Result<Option<Arc<PduEvent>>> {
+    pub fn _get_pdu(&self, event_id: &EventId) -> Result<Option<Arc<PduEvent>>> {
         if let Some(p) = self.pdu_cache.lock().unwrap().get_mut(event_id) {
             return Ok(Some(Arc::clone(p)));
         }
@@ -1838,7 +1868,7 @@ impl Rooms {
         // Our depth is the maximum depth of prev_events + 1
         let depth = prev_events
             .iter()
-            .filter_map(|event_id| Some(self.get_pdu(event_id).ok()??.depth))
+            .filter_map(|event_id| Some(self._get_pdu(event_id).ok()??.depth))
             .max()
             .unwrap_or_else(|| uint!(0))
             + uint!(1);

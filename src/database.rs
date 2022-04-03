@@ -173,7 +173,7 @@ impl Database {
                 userdevicesessionid_uiaainfo: builder.open_tree("userdevicesessionid_uiaainfo")?,
                 userdevicesessionid_uiaarequest: RwLock::new(BTreeMap::new()),
             },
-            rooms: rooms::Rooms {
+            rooms: (rooms::RoomsInt {
                 edus: rooms::RoomEdus {
                     readreceiptid_readreceipt: builder.open_tree("readreceiptid_readreceipt")?,
                     roomuserid_privateread: builder.open_tree("roomuserid_privateread")?, // "Private" read receipt
@@ -258,7 +258,7 @@ impl Database {
                     (100.0 * config.conduit_cache_capacity_modifier) as usize,
                 )),
                 lasttimelinecount_cache: Mutex::new(HashMap::new()),
-            },
+            }).into(),
             account_data: account_data::AccountData {
                 roomuserdataid_accountdata: builder.open_tree("roomuserdataid_accountdata")?,
                 roomusertype_roomuserdataid: builder.open_tree("roomusertype_roomuserdataid")?,
@@ -545,7 +545,7 @@ impl Database {
                             .unwrap();
                         let string = utils::string_from_bytes(&event_id).unwrap();
                         let event_id = <&EventId>::try_from(string.as_str()).unwrap();
-                        let pdu = db.rooms.get_pdu(event_id).unwrap().unwrap();
+                        let pdu = db.rooms.get_pdu(event_id).await.unwrap().unwrap();
 
                         if Some(&pdu.room_id) != current_room.as_ref() {
                             current_room = Some(pdu.room_id.clone());

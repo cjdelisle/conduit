@@ -155,7 +155,7 @@ pub async fn get_context_route(
         let (event_type, state_key) = db.rooms.get_statekey_from_short(shortstatekey)?;
 
         if event_type != EventType::RoomMember {
-            let pdu = match db.rooms.get_pdu(&id)? {
+            let pdu = match db.rooms.get_pdu(&id).await? {
                 Some(pdu) => pdu,
                 None => {
                     error!("Pdu in state not found: {}", id);
@@ -164,7 +164,7 @@ pub async fn get_context_route(
             };
             state.push(pdu.to_state_event());
         } else if !lazy_load_enabled || lazy_loaded.contains(&state_key) {
-            let pdu = match db.rooms.get_pdu(&id)? {
+            let pdu = match db.rooms.get_pdu(&id).await? {
                 Some(pdu) => pdu,
                 None => {
                     error!("Pdu in state not found: {}", id);

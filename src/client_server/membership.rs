@@ -866,7 +866,7 @@ pub(crate) async fn invite_helper<'a>(
             // Our depth is the maximum depth of prev_events + 1
             let depth = prev_events
                 .iter()
-                .filter_map(|event_id| Some(db.rooms.get_pdu(event_id).ok()??.depth))
+                .filter_map(|event_id| Some(db.rooms._get_pdu(event_id).ok()??.depth))
                 .max()
                 .unwrap_or_else(|| uint!(0))
                 + uint!(1);
